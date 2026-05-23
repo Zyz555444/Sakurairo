@@ -14,6 +14,9 @@ define('IRO_VERSION', wp_get_theme()->get('Version'));
 define('BUILD_VERSION', '3');
 define('INT_VERSION', '20.1.0');
 define('SSU_URL', 'https://api.fuukei.org/update/ssu.json');
+if (!defined('IRO_TIME_ARCHIVE_TTL')) {
+    define('IRO_TIME_ARCHIVE_TTL', DAY_IN_SECONDS);
+}
 
 function check_php_version($preset_version)
 {
@@ -24,6 +27,9 @@ function check_php_version($preset_version)
 //Option-Framework
 
 require get_template_directory() . '/opt/option-framework.php';
+
+require_once get_template_directory() . '/inc/classes/Cache.php';
+use Sakura\API\Cache as SakuraCache;
 
 if (!function_exists('iro_opt')) {
     $GLOBALS['iro_options'] = get_option('iro_options');
@@ -586,11 +592,14 @@ function sakura_scripts()
             //非主页的资源
             wp_enqueue_script('app-page', $core_lib_basepath . '/js/page.js', array('app', 'polyfills'), IRO_VERSION, true);
         }
+        if (iro_opt('poi_pjax', true)) {
+            wp_enqueue_script('sakurairo-pjax-perf', $core_lib_basepath . '/js/pjax-perf.js', array('app'), IRO_VERSION, true);
+        }
     }
     wp_enqueue_script('polyfills', $core_lib_basepath . '/js/polyfill.js', array(), IRO_VERSION, true);
     // defer加载
     add_filter('script_loader_tag', function($tag, $handle) {
-        $defer_handles = array('polyfills', 'app', 'sakurairo-presence');
+        $defer_handles = array('polyfills', 'app', 'sakurairo-presence', 'sakurairo-pjax-perf');
         if (in_array($handle, $defer_handles, true)) {
             return str_replace(' src', ' defer src', $tag);
         }
@@ -664,6 +673,22 @@ add_action("after_setup_theme",function(){
         wp_enqueue_style( 'wp-block-library-theme' );
         wp_enqueue_style( 'wp-block-library-comments' );
         wp_enqueue_style( 'wp-block-library-widgets' );
+
+        add_action('wp_head', function () {
+            global $wp_styles;
+            if (!$wp_styles) {
+                return;
+            }
+            foreach (array('wp-block-library', 'wp-block-library-theme') as $handle) {
+                if (!empty($wp_styles->registered[$handle]->src)) {
+                    $href = $wp_styles->registered[$handle]->src;
+                    if (!empty($wp_styles->registered[$handle]->ver)) {
+                        $href = add_query_arg('ver', $wp_styles->registered[$handle]->ver, $href);
+                    }
+                    echo '<link rel="preload" href="' . esc_url($href) . '" as="style">' . "\n";
+                }
+            }
+        }, 1);
     }
 });
 
@@ -672,21 +697,49 @@ add_action("after_setup_theme",function(){
  */
 require get_template_directory() . '/inc/decorate.php';
 require get_template_directory() . '/inc/swicher.php';
-require get_template_directory() . '/inc/api.php';
+
+function sakura_load_api_module()
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+    require_once get_template_directory() . '/inc/api.php';
+}
+
+function sakura_should_load_api_module()
+{
+    if (wp_doing_ajax() || wp_doing_cron()) {
+        return true;
+    }
+    if (defined('REST_REQUEST') && REST_REQUEST) {
+        return true;
+    }
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+    if (strpos($request_uri, '/wp-json/') !== false) {
+        return true;
+    }
+    return false;
+}
+
+add_action('init', function () {
+    if (sakura_should_load_api_module()) {
+        sakura_load_api_module();
+    }
+    if (class_exists('Sakura\\API\\BilibiliFavListCron')) {
+        Sakura\API\BilibiliFavListCron::init();
+    }
+}, 0);
+
+add_action('rest_api_init', function () {
+    sakura_load_api_module();
+}, 0);
 
 /**
  * Custom template tags for this theme.
  */
 require get_template_directory() . '/inc/template-tags.php';
-
-/**
- * 初始化Bilibili收藏夹缓存定时任务
- */
-add_action('init', function() {
-    if (class_exists('Sakura\API\BilibiliFavListCron')) {
-        Sakura\API\BilibiliFavListCron::init();
-    }
-});
 
 // 加载缓存设置页
 
@@ -726,6 +779,9 @@ function update_customize_to_iro_options() { //从key映射表中重组并保存
     }
 	$theme_mod_options = array_merge($iro_options,$theme_mod_options);
     update_option( 'iro_options', $theme_mod_options );
+    if (function_exists('iro_flush_customizer_css_cache')) {
+        iro_flush_customizer_css_cache();
+    }
 }
 add_action( 'customize_save_after', 'update_customize_to_iro_options' );
 
@@ -796,14 +852,78 @@ if (!function_exists('akina_comment_format')) {
 /**
  * 获取访客VIP样式
  */
+function sakura_get_comment_author_counts()
+{
+    return isset($GLOBALS['sakura_comment_author_counts']) ? $GLOBALS['sakura_comment_author_counts'] : null;
+}
+
+function sakura_set_comment_author_counts($counts)
+{
+    $GLOBALS['sakura_comment_author_counts'] = $counts;
+}
+
+function sakura_prime_comment_author_counts($comments)
+{
+    if (sakura_get_comment_author_counts() !== null) {
+        return sakura_get_comment_author_counts();
+    }
+    $author_counts = array();
+    if (empty($comments)) {
+        sakura_set_comment_author_counts($author_counts);
+        return $author_counts;
+    }
+    $emails = array();
+    foreach ($comments as $comment) {
+        if (!empty($comment->comment_author_email)) {
+            $emails[] = $comment->comment_author_email;
+        }
+    }
+    $emails = array_unique($emails);
+    if (empty($emails)) {
+        sakura_set_comment_author_counts($author_counts);
+        return $author_counts;
+    }
+    global $wpdb;
+    $placeholders = implode(', ', array_fill(0, count($emails), '%s'));
+    $sql = "SELECT comment_author_email, COUNT(*) AS comment_count FROM {$wpdb->comments} WHERE comment_author_email IN ($placeholders) GROUP BY comment_author_email";
+    $rows = $wpdb->get_results($wpdb->prepare($sql, $emails), ARRAY_A);
+    foreach ($rows as $row) {
+        $author_counts[$row['comment_author_email']] = (int) $row['comment_count'];
+    }
+    sakura_set_comment_author_counts($author_counts);
+    return $author_counts;
+}
+
+function sakura_prime_comment_caches($comments, $post_id)
+{
+    sakura_prime_comment_author_counts($comments);
+    if (iro_opt('comment_location') && !empty($comments)) {
+        $comment_ids = wp_list_pluck($comments, 'comment_ID');
+        update_meta_cache('comment', $comment_ids);
+    }
+    return $comments;
+}
+add_filter('comments_array', 'sakura_prime_comment_caches', 10, 2);
+
 function get_author_class($comment_author_email, $user_id)
 {
-    global $wpdb;
-    $author_count = count(
-        $wpdb->get_results(
-            "SELECT comment_ID as author_count FROM $wpdb->comments WHERE comment_author_email = '$comment_author_email' "
-        )
-    );
+    $author_counts = sakura_get_comment_author_counts();
+    if ($author_counts === null || !isset($author_counts[$comment_author_email])) {
+        global $wpdb;
+        $author_count = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->comments} WHERE comment_author_email = %s",
+                $comment_author_email
+            )
+        );
+        if ($author_counts === null) {
+            $author_counts = array();
+        }
+        $author_counts[$comment_author_email] = $author_count;
+        sakura_set_comment_author_counts($author_counts);
+    } else {
+        $author_count = $author_counts[$comment_author_email];
+    }
     # 等级梯度
     $lv_array = [0, 5, 10, 20, 40, 80, 160];
     $Lv = 0;
@@ -855,17 +975,34 @@ function restyle_text($input)
 
 function set_post_views()
 {
-    if (!is_singular())
+    if (!is_singular()) {
         return;
+    }
 
     global $post;
     $post_id = intval($post->ID);
-    if (!$post_id)
+    if (!$post_id) {
         return;
-    $views = (int) get_post_meta($post_id, 'views', true);
-    if (!update_post_meta($post_id, 'views', ($views + 1))) {
-        add_post_meta($post_id, 'views', 1, true);
     }
+
+    static $queued = array();
+    if (isset($queued[$post_id])) {
+        return;
+    }
+    $queued[$post_id] = true;
+
+    add_action('shutdown', function () use ($post_id) {
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return;
+        }
+        if (defined('DOING_CRON') && DOING_CRON) {
+            return;
+        }
+        $views = (int) get_post_meta($post_id, 'views', true);
+        if (!update_post_meta($post_id, 'views', ($views + 1))) {
+            add_post_meta($post_id, 'views', 1, true);
+        }
+    }, 20);
 }
 
 add_action('get_header', 'set_post_views');
@@ -2300,11 +2437,14 @@ function html_tag_parser($content)
 {
     if (!is_feed()) {
         //图片懒加载标签替换
-        if (iro_opt('page_lazyload') && iro_opt('page_lazyload_spinner')) {
+        if (iro_opt('page_lazyload') && iro_opt('page_lazyload_spinner') && strpos($content, '<img') !== false) {
             $img_elements = array();
             $is_matched = preg_match_all('/<img[^<]*>/i', $content, $img_elements);
             if ($is_matched) {
                 array_walk($img_elements[0], function ($img) use (&$content) {
+                    if (stripos($img, 'lazyload') !== false) {
+                        return;
+                    }
                     $class_found = 0;
                     $new_img = preg_replace('/class=[\'"]([^\'"]+)[\'"]/i', 'class="$1 lazyload"', $img, -1, $class_found);
                     if ($class_found == 0) {
@@ -4163,10 +4303,82 @@ function get_archive_info($get_page = false) {
     return $years;
 }
 
-//更新文章后更新缓存
-add_action('save_post', function(){
-    get_archive_info();
-});
+function iro_should_skip_post_cache_refresh($post_id)
+{
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return true;
+    }
+    if (wp_is_post_revision($post_id)) {
+        return true;
+    }
+    $post = get_post($post_id);
+    if (!$post || !in_array($post->post_type, array('post', 'shuoshuo', 'page'), true)) {
+        return true;
+    }
+    return false;
+}
+
+function iro_refresh_archive_cache($post_id = 0)
+{
+    if ($post_id && iro_should_skip_post_cache_refresh($post_id)) {
+        return;
+    }
+    set_transient('time_archive', get_archive_info(), IRO_TIME_ARCHIVE_TTL);
+}
+
+function iro_get_time_archive()
+{
+    $years = get_transient('time_archive');
+    if ($years === false) {
+        $years = get_archive_info();
+        set_transient('time_archive', $years, IRO_TIME_ARCHIVE_TTL);
+    }
+    return $years;
+}
+
+add_action('save_post', 'iro_refresh_archive_cache');
+add_action('delete_post', 'iro_refresh_archive_cache');
+add_action('trashed_post', 'iro_refresh_archive_cache');
+add_action('untrashed_post', 'iro_refresh_archive_cache');
+
+function iro_update_search_index_for_post($post_id)
+{
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return;
+    }
+    if (wp_is_post_revision($post_id)) {
+        return;
+    }
+    SakuraCache::update_post_index($post_id);
+}
+
+function iro_remove_search_index_for_post($post_id)
+{
+    SakuraCache::remove_post_index($post_id);
+}
+
+function iro_update_search_index_for_comment($comment_id)
+{
+    SakuraCache::update_comment_index($comment_id);
+}
+
+function iro_remove_search_index_for_comment($comment_id)
+{
+    SakuraCache::remove_comment_index($comment_id);
+}
+
+function iro_cron_rebuild_search_index()
+{
+    SakuraCache::rebuild_search_index();
+}
+
+add_action('save_post', 'iro_update_search_index_for_post', 25);
+add_action('delete_post', 'iro_remove_search_index_for_post', 25);
+add_action('trashed_post', 'iro_remove_search_index_for_post', 25);
+add_action('comment_post', 'iro_update_search_index_for_comment', 20, 1);
+add_action('edit_comment', 'iro_update_search_index_for_comment', 20, 1);
+add_action('delete_comment', 'iro_remove_search_index_for_comment', 20, 1);
+add_action('iro_rebuild_search_index', 'iro_cron_rebuild_search_index');
 
 /*
  * 友情链接提交功能
@@ -4618,7 +4830,7 @@ function sakurairo_register_link_check_cron() {
         wp_schedule_event(time(), 'weekly', 'sakurairo_weekly_link_check');
     }
 }
-add_action('wp', 'sakurairo_register_link_check_cron');
+add_action('after_setup_theme', 'sakurairo_register_link_check_cron');
 
 /**
  * 执行友情链接检查的钩子

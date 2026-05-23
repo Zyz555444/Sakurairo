@@ -1,0 +1,33 @@
+/* Static preload layout rules (colors remain in dynamic customizer CSS) */
+#preload {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: 999;
+}
+
+#preload li.active {
+    position: absolute;
+    top: 49%;
+    left: 49%;
+    list-style: none;
+}
+
+html.font-display-swap {
+    font-display: swap;
+}
+
+.shuoshuo-item .shuoshuo-avatar::after {
+    content: var(--shuoshuo-emotion, "\f86d");
+    font-family: 'FontAwesome';
+    position: absolute;
+    bottom: 0;
+    right: -3px;
+    background-color: var(--shuoshuo-emotion-bg, var(--theme-skin-matching, #505050));
+    color: #fff;
+    padding: 3px 6px;
+    border-radius: 30px;
+    font-size: 12px;
+}

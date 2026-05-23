@@ -9,7 +9,8 @@ $style_files = [
     'dark.css',
     'responsive.css',
     'animation.css',
-    'templates.css'
+    'templates.css',
+    'preload-base.css',
 ];
 
 if (isset($_GET['sakura_header'])) {
@@ -25,14 +26,31 @@ if (isset($_GET['sakura'])) {
     $style_files[] = './content-style/sakura.css';
 }
 
-$minify = isset($_GET['minify']); // 是否压缩
+$minify = isset($_GET['minify']);
 
 function compressCSS($css) {
-    // 移除注释、换行和多余空格
-    $css = preg_replace("/\/\*.*?\*\//s", "", $css); // 移除注释
-    $css = preg_replace("/\s*([{};:,])\s*/", "$1", $css); // 移除空格
-    $css = preg_replace("/;}/", "}", $css); // 修正分号
+    $css = preg_replace("/\/\*.*?\*\//s", "", $css);
+    $css = preg_replace("/\s*([{};:,])\s*/", "$1", $css);
+    $css = preg_replace("/;}/", "}", $css);
     return trim($css);
+}
+
+$cache_key_parts = array();
+foreach ($style_files as $style) {
+    $file_path = __DIR__ . '/' . $style;
+    if (file_exists($file_path)) {
+        $cache_key_parts[] = $style . ':' . filemtime($file_path);
+    }
+}
+$cache_key_parts[] = $minify ? 'minify' : 'raw';
+$cache_key = md5(implode('|', $cache_key_parts));
+
+$cache_dir = __DIR__ . '/cache';
+$cache_file = $cache_dir . '/' . $cache_key . '.css';
+
+if (is_readable($cache_file)) {
+    readfile($cache_file);
+    exit;
 }
 
 $output = "";
@@ -40,17 +58,16 @@ foreach ($style_files as $style) {
     $file_path = __DIR__ . '/' . $style;
     if (file_exists($file_path)) {
         $content = file_get_contents($file_path);
-        
-        // 添加文件名注释
         $output .= "\n/* === " . basename($style) . " === */\n";
-        
-        if ($minify) {
-            $output .= compressCSS($content);
-        } else {
-            $output .= $content;
-        }
+        $output .= $minify ? compressCSS($content) : $content;
     }
 }
 
+if (!is_dir($cache_dir)) {
+    @mkdir($cache_dir, 0755, true);
+}
+if (is_dir($cache_dir) && is_writable($cache_dir)) {
+    @file_put_contents($cache_file, $output, LOCK_EX);
+}
+
 echo $output;
-?>

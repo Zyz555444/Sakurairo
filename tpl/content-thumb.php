@@ -27,7 +27,7 @@ if ($paged === 1 && !empty($sticky_posts)) {
     $sticky_args = array(
         'post_type' => $post_types,
         'post_status' => 'publish',
-        'posts_per_page' => -1,
+        'posts_per_page' => count($sticky_posts),
         'post__in' => $sticky_posts,
         'orderby' => 'post_date',
         'order' => 'DESC',

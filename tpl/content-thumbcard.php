@@ -47,7 +47,11 @@ if (!function_exists('render_article_meta')) {
 if (!function_exists('get_post_cover_html')) {
     function get_post_cover_html() {
         global $post;
-        $use_as_thumb = get_post_meta(get_the_ID(), 'use_as_thumb', true); //'true','only',(default)
+        static $cover_index = 0;
+        $is_lcp = ($cover_index === 0);
+        $cover_index++;
+
+        $use_as_thumb = get_post_meta(get_the_ID(), 'use_as_thumb', true);
         $cover_type = ($use_as_thumb == 'true' || $use_as_thumb == 'only') ? get_post_meta(get_the_ID(), 'cover_type', true) : '';
         $cover_html = "";
         switch ($cover_type) {
@@ -64,24 +68,36 @@ if (!function_exists('get_post_cover_html')) {
                     . '</video>';
                 break;
             default:
-                $post_img = '';
                 if (has_post_thumbnail()) {
                     $post_thumbnail_id = get_post_thumbnail_id($post->ID);
-                    $large_image_url = wp_get_attachment_image_src($post_thumbnail_id, 'large');
-                    if ($large_image_url == false) {
-                        $large_image_url = wp_get_attachment_image_src($post_thumbnail_id, 'medium');
-                        if ($large_image_url == false) {
-                            $large_image_url = wp_get_attachment_image_src($post_thumbnail_id);
-                            if ($large_image_url == false) {
-                                $post_img = DEFAULT_FEATURE_IMAGE();
-                            }
+                    if ($is_lcp) {
+                        $cover_html = wp_get_attachment_image($post_thumbnail_id, 'large', false, array(
+                            'alt' => get_the_title(),
+                            'fetchpriority' => 'high',
+                            'loading' => 'eager',
+                            'decoding' => 'async',
+                        ));
+                    } else {
+                        $cover_html = wp_get_attachment_image($post_thumbnail_id, 'large', false, array(
+                            'alt' => get_the_title(),
+                            'class' => 'lazyload',
+                            'loading' => 'lazy',
+                        ));
+                        if ($cover_html) {
+                            $placeholder = esc_url(iro_opt('load_out_svg')) . '#lazyload-blur';
+                            $cover_html = preg_replace('/\ssrcset=/', ' data-srcset=', $cover_html, 1);
+                            $cover_html = preg_replace('/\ssrc="([^"]+)"/', ' src="' . $placeholder . '" data-src="$1"', $cover_html, 1);
                         }
                     }
-                    $post_img = $large_image_url[0] ?? DEFAULT_FEATURE_IMAGE('th');
-                } else {
-                    $post_img = DEFAULT_FEATURE_IMAGE('th');
                 }
-                $cover_html = '<img alt="' . esc_attr(get_the_title()) . '" class="lazyload" src="' . esc_url(iro_opt('load_out_svg')) . '#lazyload-blur" data-src="' . esc_url($post_img) . '"/>';
+                if (empty($cover_html)) {
+                    $post_img = DEFAULT_FEATURE_IMAGE('th');
+                    if ($is_lcp) {
+                        $cover_html = '<img alt="' . esc_attr(get_the_title()) . '" src="' . esc_url($post_img) . '" fetchpriority="high" loading="eager" decoding="async"/>';
+                    } else {
+                        $cover_html = '<img alt="' . esc_attr(get_the_title()) . '" class="lazyload" src="' . esc_url(iro_opt('load_out_svg')) . '#lazyload-blur" data-src="' . esc_url($post_img) . '" loading="lazy"/>';
+                    }
+                }
                 break;
         }
         return $cover_html;
@@ -102,27 +118,14 @@ if (!function_exists('get_post_cover_html')) {
                 $emotion_color = iro_opt('theme_skin_matching'); 
             }
             $unique_id = 'shuoshuo-' . get_the_ID();
+            $shuoshuo_style = '--shuoshuo-emotion: "' . esc_attr($emotion) . '"; --shuoshuo-emotion-bg: ' . esc_attr($emotion_color) . ';';
             ?>
-            <article class="shuoshuo-item" id="<?php echo esc_attr($unique_id); ?>">
+            <article class="shuoshuo-item" id="<?php echo esc_attr($unique_id); ?>" style="<?php echo esc_attr($shuoshuo_style); ?>">
                 <div class="shuoshuo-content-wrapper">
                     <div class="shuoshuo-avatar">
                         <a href="<?php echo esc_url(get_author_posts_url(get_the_author_meta('ID'))); ?>">
                             <img src="<?php echo esc_url(get_avatar_profile_url(get_the_author_meta('ID'))); ?>" class="avatar avatar-48" width="48" height="48" alt="author_avatar">
                         </a>
-                        <style>
-                            #<?php echo esc_attr($unique_id); ?> .shuoshuo-avatar::after {
-                                content: "<?php echo esc_attr($emotion); ?>";
-                                font-family:'FontAwesome';
-                                position: absolute;
-                                bottom: 0;
-                                right: -3px;
-                                background-color: <?php echo esc_attr($emotion_color); ?>;
-                                color: #fff;
-                                padding: 3px 6px;
-                                border-radius: 30px;
-                                font-size: 12px;
-                            }
-                        </style>
                     </div>
                     <div class="shuoshuo-wrapper">
                         <div class="shuoshuo-meta">

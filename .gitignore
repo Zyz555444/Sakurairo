@@ -4,3 +4,4 @@ inc/blocks/node_modules
 attached/
 .codex*
 *.patch
+css/cache/

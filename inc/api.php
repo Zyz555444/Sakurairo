@@ -138,13 +138,8 @@ add_action('rest_api_init', function () {
     // 归档页信息
     register_rest_route('sakura/v1', '/archive_info', array(
         'methods' => 'GET',
-        'callback' => function (){
-            $time_archive = get_transient('time_archive');
-            if (!$time_archive) {
-                $time_archive = get_archive_info();
-                set_transient('time_archive',$time_archive,30);
-            }
-            return $time_archive;
+        'callback' => function () {
+            return iro_get_time_archive();
         },
         'permission_callback' => '__return_true'
     )
@@ -338,12 +333,25 @@ function cache_search_json()
         );
         $result = new WP_REST_Response($output, 403);
     } else {
-        $output = get_transient('cache_search');
-        if (!$output) {
-            $output = Cache::search_json();
+        $index = Cache::get_search_index();
+        $stale = false;
+        if ($index !== null) {
+            $output = Cache::index_to_output($index);
+        } else {
+            $output = get_transient('cache_search');
+            if ($output === false) {
+                $output = array();
+                Cache::schedule_rebuild_search_index();
+                $stale = true;
+            }
+        }
+        if (!$stale) {
             set_transient('cache_search', $output, 3600);
         }
         $result = new WP_REST_Response($output, 200);
+        if ($stale) {
+            $result->header('X-Index-Stale', '1');
+        }
     }
     $result->set_headers(
         array(

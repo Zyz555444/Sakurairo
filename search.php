@@ -17,15 +17,16 @@ iro_the_breadcrumbs();
     <?php
     $paged = max(1, get_query_var('paged'));
     $search_query = get_search_query();
-    $sticky_posts = get_option('sticky_posts');
+    $sticky_posts = array_map('intval', (array) get_option('sticky_posts'));
     $show_pages_filter = true;
+    $posts_per_page = max(1, (int) get_option('posts_per_page', 10));
 
-    // 默认勾选的选项
     $default_checked = array('post');
-    if (iro_opt('search_for_shuoshuo')) $default_checked[] = 'shuoshuo';
+    if (iro_opt('search_for_shuoshuo')) {
+        $default_checked[] = 'shuoshuo';
+    }
     if (iro_opt('search_for_pages')) {
         if (iro_opt('only_admin_can_search_pages')) {
-            //仅限管理员检索页面
             if (current_user_can('manage_options')) {
                 $default_checked[] = 'page';
             } else {
@@ -38,44 +39,45 @@ iro_the_breadcrumbs();
         $show_pages_filter = false;
     }
 
-    // 获取当前查询参数中的content_type内容
-    $content_types = isset($_GET['content_type']) ? explode(',', $_GET['content_type']) : $default_checked;
+    $content_types = isset($_GET['content_type'])
+        ? explode(',', sanitize_text_field(wp_unslash($_GET['content_type'])))
+        : $default_checked;
+    $exclude_ids = array_filter(array_map('intval', explode(',', (string) iro_opt('custom_exclude_search_results'))));
 
-    // 搜索页标题
     if (!iro_opt('patternimg') || !get_random_bg_url()) : ?>
         <header class="page-header">
             <h1 class="page-title"><?php printf(esc_html__('Search result: %s', 'sakurairo'), '<span>' . esc_html($search_query) . '</span>'); ?></h1>
-        </header><!-- .page-header -->
+        </header>
     <?php endif; ?>
 
     <?php
-    $all_results_args = array(
+    $base_args = array(
         'post_type' => $content_types,
         'post_status' => 'publish',
         's' => $search_query,
-        'posts_per_page' => -1,
         'orderby' => 'relevance',
         'order' => 'DESC',
     );
 
-    if (iro_opt('only_admin_can_search_pages')) {
-        // 只允许管理员检索页面
-        if (!current_user_can('manage_options')) {
-            // 不是管理员就移除page
-            $all_results_args['post_type'] = array_diff($content_types, array('page'));
-        }
+    if (iro_opt('only_admin_can_search_pages') && !current_user_can('manage_options')) {
+        $base_args['post_type'] = array_values(array_diff($content_types, array('page')));
     }
 
-    $all_results_args['post__not_in'] = array_map('intval', explode(',', iro_opt('custom_exclude_search_results')));
-    //排除自定义内容id
+    if (!empty($exclude_ids)) {
+        $base_args['post__not_in'] = $exclude_ids;
+    }
 
-    $all_results_query = new WP_Query($all_results_args);
+    $count_query = new WP_Query(array_merge($base_args, array(
+        'posts_per_page' => 1,
+        'fields' => 'ids',
+    )));
+    $total_results = (int) $count_query->found_posts;
+    wp_reset_postdata();
 
     if (iro_opt('search_filter')) : ?>
-        <!-- 筛选器部分 -->
-        <div id="filter-container">
+        <div class="filter-container" id="filter-container">
             <div class="filter-count">
-                <?php echo $all_results_query->found_posts; ?> <?php echo __('results found', 'sakurairo'); ?>
+                <?php echo esc_html($total_results); ?> <?php echo esc_html__('results found', 'sakurairo'); ?>
             </div>
 
             <form id="search-filter-form" action="" method="GET">
@@ -84,24 +86,24 @@ iro_the_breadcrumbs();
                 <?php endif; ?>
 
                 <label>
-                    <input type="checkbox" name="content_type[]" value="post" onchange="applyFilter()" <?php echo in_array('post', $content_types) ? 'checked' : ''; ?>> <?php echo __('Post', 'sakurairo'); ?>
+                    <input type="checkbox" name="content_type[]" value="post" onchange="applyFilter()" <?php echo in_array('post', $content_types, true) ? 'checked' : ''; ?>> <?php echo esc_html__('Post', 'sakurairo'); ?>
                 </label>
 
                 <?php if (iro_opt('search_for_shuoshuo')) : ?>
                     <label>
-                        <input type="checkbox" name="content_type[]" value="shuoshuo" onchange="applyFilter()" <?php echo in_array('shuoshuo', $content_types) ? 'checked' : ''; ?>> <?php echo __('shuoshuo', 'sakurairo'); ?>
+                        <input type="checkbox" name="content_type[]" value="shuoshuo" onchange="applyFilter()" <?php echo in_array('shuoshuo', $content_types, true) ? 'checked' : ''; ?>> <?php echo esc_html__('shuoshuo', 'sakurairo'); ?>
                     </label>
                 <?php endif; ?>
 
                 <?php if ($show_pages_filter) : ?>
                     <label>
-                        <input type="checkbox" name="content_type[]" value="page" onchange="applyFilter()" <?php echo in_array('page', $content_types) ? 'checked' : ''; ?>> <?php echo __('Page', 'sakurairo'); ?>
+                        <input type="checkbox" name="content_type[]" value="page" onchange="applyFilter()" <?php echo in_array('page', $content_types, true) ? 'checked' : ''; ?>> <?php echo esc_html__('Page', 'sakurairo'); ?>
                     </label>
                 <?php endif; ?>
             </form>
 
-            <div id="filter-toggle" title="<?php echo __('If no option is selected, all results are retrieved by default', 'sakurairo'); ?>" onclick="applyFilter()">
-            <a href="./" id="the_filter" style="color: white;"><i class="fas fa-filter"></i></a> <?php echo __('Click to filter', 'sakurairo'); ?></a>
+            <div id="filter-toggle" title="<?php echo esc_attr__('If no option is selected, all results are retrieved by default', 'sakurairo'); ?>" onclick="applyFilter()">
+            <a href="./" id="the_filter" style="color: white;"><i class="fas fa-filter"></i></a> <?php echo esc_html__('Click to filter', 'sakurairo'); ?>
         </div>
     </div>
     <?php endif; ?>
@@ -121,46 +123,80 @@ iro_the_breadcrumbs();
 
         var the_filter = document.getElementById('the_filter');
         the_filter.href = newUrl;
-
         the_filter.click();
     }
     </script>
 
     <?php
-    // 结果处理，排序，展示
-    $all_results = [];
-    if ($all_results_query->have_posts()) :
-        if (iro_opt('sticky_pinned_content')) {
-            // 置顶文章是否在检索中也置顶
-            $sticky_results = [];
-            $non_sticky_results = [];
-            
-            while ($all_results_query->have_posts()) : $all_results_query->the_post();
-                if (in_array(get_the_ID(), $sticky_posts)) {
-                    $sticky_results[] = $post;
-                } else {
-                    $non_sticky_results[] = $post;
-                }
-            endwhile;
-            
-            $all_results = array_merge($sticky_results, $non_sticky_results);
-        } else {
-            while ($all_results_query->have_posts()) : $all_results_query->the_post();
-                $all_results[] = $post;
-            endwhile;
+    $display_posts = array();
+    $use_sticky = iro_opt('sticky_pinned_content') && !empty($sticky_posts);
+
+    if ($use_sticky && $paged === 1) {
+        $sticky_args = array_merge($base_args, array(
+            'post__in' => $sticky_posts,
+            'posts_per_page' => count($sticky_posts),
+            'orderby' => 'post__in',
+        ));
+        if (!empty($exclude_ids)) {
+            $sticky_args['post__not_in'] = $exclude_ids;
         }
-    endif;
-    wp_reset_postdata();
+        $sticky_query = new WP_Query($sticky_args);
+        $sticky_results = $sticky_query->posts;
+        $sticky_count = count($sticky_results);
+        $non_sticky_needed = max(0, $posts_per_page - $sticky_count);
 
-    // 内容分页
-    $total_results = count($all_results);
-    $posts_per_page = 10;
-    $total_pages = ceil($total_results / $posts_per_page);
-    $current_page_results = array_slice($all_results, ($paged - 1) * $posts_per_page, $posts_per_page);
+        if ($non_sticky_needed > 0) {
+            $non_sticky_args = array_merge($base_args, array(
+                'post__not_in' => array_merge($exclude_ids, $sticky_posts),
+                'posts_per_page' => $non_sticky_needed,
+                'paged' => 1,
+            ));
+            $non_sticky_query = new WP_Query($non_sticky_args);
+            $display_posts = array_merge($sticky_results, $non_sticky_query->posts);
+            wp_reset_postdata();
+        } else {
+            $display_posts = array_slice($sticky_results, 0, $posts_per_page);
+        }
+        wp_reset_postdata();
+    } elseif ($use_sticky && $paged > 1) {
+        $sticky_args = array_merge($base_args, array(
+            'post__in' => $sticky_posts,
+            'posts_per_page' => count($sticky_posts),
+            'fields' => 'ids',
+        ));
+        $sticky_query = new WP_Query($sticky_args);
+        $sticky_count = min((int) $sticky_query->found_posts, $posts_per_page);
+        wp_reset_postdata();
 
-    // 输出当前页内容
-    if (!empty($current_page_results)) :
-        foreach ($current_page_results as $post) :
+        $non_sticky_page1 = max(0, $posts_per_page - $sticky_count);
+        $offset = $non_sticky_page1 + ($paged - 2) * $posts_per_page;
+        if ($offset < 0) {
+            $offset = 0;
+        }
+
+        $page_args = array_merge($base_args, array(
+            'post__not_in' => array_merge($exclude_ids, $sticky_posts),
+            'posts_per_page' => $posts_per_page,
+            'offset' => $offset,
+        ));
+        $page_query = new WP_Query($page_args);
+        $display_posts = $page_query->posts;
+        wp_reset_postdata();
+    } else {
+        $page_args = array_merge($base_args, array(
+            'posts_per_page' => $posts_per_page,
+            'paged' => $paged,
+        ));
+        $page_query = new WP_Query($page_args);
+        $display_posts = $page_query->posts;
+        wp_reset_postdata();
+    }
+
+    $total_pages = (int) ceil($total_results / $posts_per_page);
+
+    if (!empty($display_posts)) :
+        sakura_prime_post_caches($display_posts);
+        foreach ($display_posts as $post) :
             setup_postdata($post);
             get_template_part('tpl/content', 'thumbcard');
         endforeach;
@@ -173,7 +209,6 @@ iro_the_breadcrumbs();
     else :
         ?>
         <div class="search-box" style="margin-top: 15px;">
-            <!-- search start -->
             <form class="s-search" method="get" action="<?php echo esc_url(home_url('/')); ?>" role="search">
                 <label class="screen-reader-text" for="search-empty-input"><?php esc_html_e('Search', 'sakurairo'); ?></label>
                 <input id="search-empty-input" class="text-input" type="search" name="s" placeholder="<?php esc_attr_e('Search...', 'sakurairo'); ?>" required>
@@ -181,14 +216,12 @@ iro_the_breadcrumbs();
                     <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
                 </button>
             </form>
-            <!-- search end -->
         </div>
         <?php get_template_part('tpl/content', 'none'); ?>
     <?php
     endif;
     wp_reset_postdata();
     ?>
-
 
 		<style>
 			.nav-previous,
@@ -221,7 +254,7 @@ iro_the_breadcrumbs();
 				color: #A0DAD0;
 			}
 		</style>
-	</main><!-- #main -->
-</section><!-- #primary -->
+	</main>
+</section>
 
 <?php get_footer(); ?>

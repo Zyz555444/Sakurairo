@@ -1,5 +1,19 @@
 <?php
-function customizer_css() { ?>
+function iro_flush_customizer_css_cache()
+{
+    delete_transient('iro_customizer_css');
+}
+
+function customizer_css() {
+    if (!is_customize_preview()) {
+        $cached = get_transient('iro_customizer_css');
+        if (is_string($cached) && $cached !== '') {
+            echo $cached;
+            return;
+        }
+    }
+    ob_start();
+?>
 <style>
 <?php 
 /* 主题皮肤与根变量 */
@@ -878,5 +892,12 @@ background-image: url(<?=iro_opt('vision_resource_basepath', 'https://s.nmxc.ltd
 <?php endif; ?>
 
 </style>
-<?php }
+<?php
+    $output = ob_get_clean();
+    if (!is_customize_preview()) {
+        set_transient('iro_customizer_css', $output, DAY_IN_SECONDS);
+    }
+    echo $output;
+}
 add_action('wp_head', 'customizer_css', 10);
+add_action('customize_save_after', 'iro_flush_customizer_css_cache', 5);
