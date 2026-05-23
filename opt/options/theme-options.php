@@ -154,7 +154,24 @@ $prefix = 'iro_options';
           'auto'  => __('Auto complete SEO','sakurairo_csf'),
           'on'  => __('Always add theme SEO','sakurairo_csf'),
         ),
-        "default"=>"on"
+        "default"=>"auto"
+      ),
+
+      array(
+        'id' => 'iro_seo_breadcrumb',
+        'type' => 'switcher',
+        'title' => __('Breadcrumb Navigation','sakurairo_csf'),
+        'label' => __('Show breadcrumb on posts, pages and archives','sakurairo_csf'),
+        'default' => true,
+        'dependency' => array( 'iro_seo', '!=', 'off', '', 'true' ),
+      ),
+
+      array(
+        'id' => 'iro_seo_default_og_image',
+        'type' => 'text',
+        'title' => __('Default OG Image URL','sakurairo_csf'),
+        'desc' => __('Optional fallback image for social sharing when no featured image is available','sakurairo_csf'),
+        'dependency' => array( 'iro_seo', '!=', 'off', '', 'true' ),
       ),
 
       array(

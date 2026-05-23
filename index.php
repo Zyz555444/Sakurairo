@@ -43,10 +43,10 @@ foreach ($component_order as $component) {
             ?>
             <div id="primary" class="content-area">
                 <main id="main" class="site-main" role="main">
-                    <h1 class="main-title posts-area-title">
+                    <h2 class="main-title posts-area-title">
                         <i class="<?php echo esc_attr(iro_opt('post_area_icon', 'fa-regular fa-bookmark')); ?>" aria-hidden="true"></i>
                         <?php echo esc_html(iro_opt('post_area_title', '文章列表')); ?>
-                    </h1>
+                    </h2>
 
                     <?php if (have_posts() || $has_sticky_on_first_page) : ?>
                         <?php if (is_home() && !is_front_page()) : ?>
@@ -90,8 +90,7 @@ foreach ($component_order as $component) {
 if (!in_array('primary', $component_order)) : //是否需要提供虚假的首页标记，解决当文章不显示时封面丢失，兼容前端js
     ?>
         <main id="main" class="site-main">
-            <h1 class="main-title posts-area-title" style="display:none;">
-            </h1>
+            <motion class="posts-area-marker" aria-hidden="true"></motion>
         </main>
 <?php
 endif;

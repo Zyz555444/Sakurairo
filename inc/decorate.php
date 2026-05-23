@@ -306,8 +306,36 @@ font-family:<?=iro_opt('footer_text_font'); ?> !important;
 font-family:<?=iro_opt('style_menu_font'); ?> !important;
 }
 
-h1.main-title,h1.fes-title{
+h1.main-title,h2.main-title,h1.fes-title{
 font-family:<?=iro_opt('area_title_font'); ?>;
+}
+
+.iro-breadcrumbs {
+    max-width: 780px;
+    margin: 12px auto 0;
+    padding: 0 16px;
+    font-size: 13px;
+    color: var(--color-text-secondary, #888);
+}
+.iro-breadcrumbs-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 4px;
+}
+.iro-breadcrumbs-item a {
+    color: inherit;
+    text-decoration: none;
+}
+.iro-breadcrumbs-item a:hover {
+    color: var(--theme-skin-matching, #505050);
+}
+.iro-breadcrumbs-sep {
+    list-style: none;
+    opacity: 0.6;
 }
 
 .header-info p{
@@ -767,13 +795,15 @@ body.dark .post-list-thumb i{
 
 <?php if(iro_opt('area_title_text_align') == 'center'){ ?>
 h1.fes-title,
-h1.main-title {
+h1.main-title,
+h2.main-title {
     justify-content: center;
 }
 
 <?php }else if(iro_opt('area_title_text_align') == 'right'){ ?>
 h1.fes-title,
-h1.main-title {
+h1.main-title,
+h2.main-title {
     justify-content: right;
 }
 

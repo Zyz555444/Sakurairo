@@ -1,14 +1,14 @@
 <?php
 
 get_header();
-
+iro_the_breadcrumbs();
 ?>
 <div class="author_info">
     <div class="avatar" data-post-count="<?php echo count_user_posts(get_the_author_meta('ID'), 'post'); ?>">
         <?php echo get_avatar(get_the_author_meta('ID')); ?>
     </div>
     <div class="author-center">
-        <h3><?php the_author(); ?></h3>
+        <h1 class="author-title"><?php the_author(); ?></h1>
         <div class="description">
             <?php 
             $description = get_the_author_meta('description');

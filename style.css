@@ -2405,7 +2405,8 @@ nav#comments-navi {
 }
 
 h1.fes-title,
-h1.main-title {
+h1.main-title,
+h2.main-title {
   color: var(--theme-skin, #505050);
   font-size: 18px;
   font-weight: var(--global-font-weight, 400);

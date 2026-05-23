@@ -81,7 +81,7 @@ if (!function_exists('get_post_cover_html')) {
                 } else {
                     $post_img = DEFAULT_FEATURE_IMAGE('th');
                 }
-                $cover_html = '<img alt="post_img" class="lazyload" src="' . esc_url(iro_opt('load_out_svg')) . '#lazyload-blur" data-src="' . esc_url($post_img) . '"/>';
+                $cover_html = '<img alt="' . esc_attr(get_the_title()) . '" class="lazyload" src="' . esc_url(iro_opt('load_out_svg')) . '#lazyload-blur" data-src="' . esc_url($post_img) . '"/>';
                 break;
         }
         return $cover_html;
@@ -160,7 +160,7 @@ if (!function_exists('get_post_cover_html')) {
             $article_theme_color = var_post_theme_color(get_the_ID());
             $article_theme_style = ($article_theme_color !== 'false') ? '--article-theme-highlight: ' . esc_attr($article_theme_color) : '';
             ?>
-            <article class="post post-list-thumb" style="<?php echo esc_attr($article_theme_style); ?>" itemscope="" itemtype="http://schema.org/BlogPosting">
+            <article class="post post-list-thumb" style="<?php echo esc_attr($article_theme_style); ?>">
                 <div class="post-thumb">
                     <a href="<?php the_permalink(); ?>">
                         <?php echo $cover_html; ?>

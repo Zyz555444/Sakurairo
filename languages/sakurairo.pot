@@ -1912,6 +1912,22 @@ msgstr ""
 msgid "Posts"
 msgstr ""
 
+#: inc/seo.php
+msgid "Home"
+msgstr ""
+
+#: inc/seo.php
+msgid "Breadcrumb"
+msgstr ""
+
+#: inc/seo.php
+msgid "Search: %s"
+msgstr ""
+
+#: inc/theme-plus.php
+msgid "Untitled"
+msgstr ""
+
 #. Theme Name of the plugin/theme
 msgid "Sakurairo"
 msgstr ""

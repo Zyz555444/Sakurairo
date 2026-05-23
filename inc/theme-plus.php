@@ -554,19 +554,22 @@ function siren_auto_link_nofollow( $content ) {
   return $content;
 }
 
-// 图片自动加标题
+// 图片自动加标题与 alt
 add_filter('the_content', 'siren_auto_images_alt');
 function siren_auto_images_alt($content) {
     global $post;
-    $post_title = $post ? $post->post_title : '默认标题'; // 检查 $post 是否为空
+    $post_title = $post ? $post->post_title : __('Untitled', 'sakurairo');
 
-    // 优化正则表达式
     $pattern = '/<a([^>]*?)href=(["\'])([^"\']*?\.(?:bmp|gif|jpeg|jpg|png))\2([^>]*?)>/i';
-    $replacement = '<a$1href=$2$3$2 alt="' . esc_attr($post_title) . '" title="' . esc_attr($post_title) . '"$4>';
-
-    // 使用 preg_replace_callback 以提高性能
-    $content = preg_replace_callback($pattern, function($matches) use ($post_title) {
+    $content = preg_replace_callback($pattern, function ($matches) use ($post_title) {
         return '<a' . $matches[1] . 'href=' . $matches[2] . $matches[3] . $matches[2] . ' alt="' . esc_attr($post_title) . '" title="' . esc_attr($post_title) . '"' . $matches[4] . '>';
+    }, $content);
+
+    $content = preg_replace_callback('/<img([^>]*?)>/i', function ($matches) use ($post_title) {
+        if (preg_match('/\balt\s*=\s*["\'][^"\']*["\']/i', $matches[1])) {
+            return $matches[0];
+        }
+        return '<img' . $matches[1] . ' alt="' . esc_attr($post_title) . '">';
     }, $content);
 
     return $content;

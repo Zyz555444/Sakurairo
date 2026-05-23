@@ -2106,6 +2106,22 @@ msgstr "邮箱地址"
 msgid "Verification Code"
 msgstr "验证码"
 
+#: inc/seo.php
+msgid "Home"
+msgstr "首页"
+
+#: inc/seo.php
+msgid "Breadcrumb"
+msgstr "面包屑导航"
+
+#: inc/seo.php
+msgid "Search: %s"
+msgstr "搜索：%s"
+
+#: inc/theme-plus.php
+msgid "Untitled"
+msgstr "无标题"
+
 #. Theme Name of the plugin/theme
 msgid "Sakurairo"
 msgstr "桜いろ"

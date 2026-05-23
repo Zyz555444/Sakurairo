@@ -733,6 +733,7 @@ add_action( 'customize_save_after', 'update_customize_to_iro_options' );
  * function update
  */
 require get_template_directory() . '/inc/theme-plus.php';
+require get_template_directory() . '/inc/seo.php';
 require get_template_directory() . '/inc/categories-images.php';
 
 if (!function_exists('akina_comment_format')) {
@@ -2265,92 +2266,6 @@ function custom_admin_open_sans_font_login_page()
     }
 }
 add_action('login_head', 'custom_admin_open_sans_font_login_page');
-
-// 自动为页面添加description标签
-if (iro_opt('iro_seo','on') != 'off') {
-
-    if (iro_opt('iro_seo','on') == 'auto') {
-        add_action('wp_head', function () {
-            ob_start();
-        }, 0);
-
-        add_action('wp_head', function () {
-            $head_content = ob_get_clean();
-
-            // 检查seo部分
-            $has_description = preg_match('/<meta\s+name=["\']description["\']/i', $head_content);
-            $has_keywords    = preg_match('/<meta\s+name=["\']keywords["\']/i', $head_content);
-
-            echo $head_content;
-            // 选择性补充
-            if (!$has_description) {echo iro_get_description();}
-            if (!$has_keywords) {echo iro_get_keywords();}
-        }, 99);
-    } else {
-        // 始终添加
-        add_action('wp_head', function () {
-            echo iro_get_description();
-            echo iro_get_keywords();
-        }, 99);
-    }
-}
-
-function iro_get_keywords(){
-    global $post;
-    $keywords = '';
-
-    if ( is_singular() ) {
-        $tags = get_the_tags();
-        if ( $tags ) {
-            $keywords = implode(',', array_column($tags, 'name'));
-        }
-    } elseif ( is_category() ) {
-        $cats = get_the_category();
-        if ( $cats ) {
-            $keywords = implode(',', array_column($cats, 'name'));
-        }
-    }
-
-    if ( empty($keywords) ) {
-        $keywords = iro_opt('iro_meta_keywords');
-    }
-
-    if ( empty($keywords) ) {
-        $keywords = get_bloginfo('name');
-    }
-
-    if ( ! empty($keywords) ) {
-        return '<meta name="keywords" content="' . esc_attr($keywords) . '">' . "\n";
-    }
-    return '';
-}
-
-function iro_get_description(){
-    global $post;
-    $description = '';
-
-    if (is_singular() && !empty($post->post_content)) {
-        $description = trim(mb_strimwidth(preg_replace('/\s+/', ' ', strip_tags($post->post_content)), 0, 240, '…'));
-    }
-    
-    if (empty($description) && is_category()) {
-        $description = trim(category_description());
-    }
-
-    if (empty($description)) {
-        $description = iro_opt('iro_meta_description');
-    }
-
-    if (empty($description)) {
-        $description = get_bloginfo('description');
-    }
-
-    if (!empty($description)) {
-        return '<meta name="description" content="' . esc_attr($description) . '">' . "\n";
-    }
-    
-    return '';
-}
 
 function array_html_props(array $props)
 {
